@@ -90,53 +90,112 @@ let makeOnePage (p : pagination array array) a b i j =
   else true;;
 
 
+let tracePageLs p i j pred = 
+  let tracePage = ref [(i, j)] in
+  let movablePred = ref pred in
+
+  let _ =
+     while not (!movablePred = (-1, -1)) do
+     let _ = tracePage := !movablePred :: !tracePage in
+     let (x, y) = !movablePred in
+     movablePred := p.(x).(y).predecessor
+     done
+  in (!tracePage);;
+
+let tracePageLen tracePageList = (List.length tracePageList) -1 ;;
+
+let tracePageLsStringfied tracePageList = List.fold_right (fun x y -> x ^", "^ y)
+                              (List.map (fun x -> let (t, f) = x in
+                                Printf.sprintf "(%d, %d)" t f) tracePageList) "";;
+
+
+let pageNoOfFigs tracePageList =
+  let tracePageListFigPart = List.map (fun x -> let (t, f) = x in f) tracePageList in
+  let result = ref [] in
+  let _ = for  i = 1 to (List.length tracePageListFigPart) - 1 do
+    let diff = (List.nth tracePageListFigPart i)- (List.nth tracePageListFigPart (i-1)) in
+    result := List.append !result (List.init diff (fun x -> i))
+  done in
+  !result ;;
+
+let rec lineNoToPageAux lineNo tracePageListLinePart res = 
+  if tracePageListLinePart == [] then 0
+  else if List.hd tracePageListLinePart > lineNo then res
+  else lineNoToPageAux lineNo (List.tl tracePageListLinePart) (res + 1);;
+
+let lineNoToPage lineNo tracePageLs = lineNoToPageAux lineNo tracePageLs 0;;
+
+let figsToReferPage maxFigNo tracePageLs = 
+  let figArray = List.tl (List.init (maxFigNo +1) (fun d -> d)) in
+  let referArray = List.map (fun x -> referId x) figArray in
+  let tracePageListLinePart = List.map (fun x -> let (t, f) = x in t) tracePageLs in
+  let pageOfRefers = List.map (fun x -> lineNoToPage x tracePageListLinePart) referArray in
+
+  pageOfRefers;; 
+
+
+let diffSumOfRefererAndFig tracePageList f = 
+  let pageNoOfFigsList = pageNoOfFigs tracePageList in
+  let pageNoOfRefersList = figsToReferPage f tracePageList in
+  let combined = List.combine pageNoOfFigsList pageNoOfRefersList in
+  let diffOfCombined = List.map (fun x -> let (y,z) = x in y - z) combined in
+  let diffSum = List.fold_right (+) diffOfCombined 0 in 
+  diffSum;;
+
+
+
+let totalCost p t f = 
+  let tracePageExample = tracePageLs p t f p.(t).(f).predecessor in
+  let diffSum = diffSumOfRefererAndFig tracePageExample f in
+  let pageLen = tracePageLen tracePageExample in
+
+  let costFunction pageLen diffSum =
+    (let a = 1 in (*weight factor a for pageLen*)
+    let b = 1 in (*weight factor b for diffSum*)
+    let totalCost = a * pageLen + b * diffSum in
+  totalCost)  in
+
+  let totalCost = costFunction pageLen diffSum in
+totalCost;;
+
+
+let chooseBetterPred p oldAB newAB = 
+  let (oldA, oldB) = oldAB in
+  let (newA, newB) = newAB in
+  if oldA == -1 && oldB == -1 then newAB
+  else 
+    let costOld = totalCost p oldA oldB in
+    let costNew = totalCost p newA newB in
+    if costNew < costOld then newAB
+    else oldAB;;
+
 (*以下是分頁程式*)
 let pagize p = 
 let _ = p.(0).(0) <- {isPagizable = true; noOfPages = 0;  predecessor = (nil , nil)} in
 for i=0 to t do
 for j=0 to f do
-    for a = 0 to i do
-    for b = 0 to j do
-        if i != 0 || j != 0 then
-        let canMakeOnePage =  makeOnePage p a b i j in
-        if canMakeOnePage then
-        let _ = p.(i).(j).isPagizable <- true in
-        let _ = p.(i).(j).predecessor <- (a, b) in
-        let _ = p.(i).(j).noOfPages <- p.(i).(j).noOfPages + 1 in
-        ()
-        else
-        ()
-    done
-    done
+  for a = 0 to i do
+  for b = 0 to j do
+      if i != 0 || j != 0 then
+      let canMakeOnePage =  makeOnePage p a b i j in
+      if canMakeOnePage then
+      let (oldA, oldB) = p.(i).(j).predecessor in
+      let (preferedA, preferedB) = chooseBetterPred p (oldA, oldB)  (a,b) in
+
+      let _ = p.(i).(j).isPagizable <- true in
+      let _ = p.(i).(j).predecessor <- (preferedA, preferedB) in
+      let _ = p.(i).(j).noOfPages <- p.(i).(j).noOfPages + 1 in
+      ()
+      else
+      ()
+  done
+  done
 done
 done;;
 
+
 pagize p;;
 
+let x = tracePageLs p 300 25 p.(300).(25).predecessor;;
 
-for i=0 to  t do
-  for j=0 to f do
-  let x1,y1 = p.(i).(j).predecessor in
-  Printf.printf "%d\t%d->%d\t%d\n" i j x1 y1
-  done
-  done;;
-
-
-
-
-
-
-
-let costFuncOfPredecessor p i j pred = 
-  let  tracePage = ref [(i, j)] in
-  let movablePred = ref pred in
-
-  let _ =
-     while !movablePred != (-1, -1) do
-     let _ = tracePage := !movablePred :: !tracePage in
-     let (x, y) = !movablePred in
-     let _ = movablePred := p.(x).(y).predecessor in Printf.printf "%d\t%d\n" x y
-     done
-  in  !tracePage;;
-
-costFuncOfPredecessor p 300 25 p.(300).(25).predecessor;;
+print_string (tracePageLsStringfied x);;
